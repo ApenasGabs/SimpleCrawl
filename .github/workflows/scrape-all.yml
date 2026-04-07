@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 env:
-  TEMPLATE_DIR: "1st.Crawler/template"
-  DATA_DIR: "1st.Crawler/template/data/scrapers"
+  TEMPLATE_DIR: "template"
+  DATA_DIR: "template/data/scrapers"
   MAX_RETRIES: 2
   RETRY_DELAY: 10
 
@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: ${{ env.TEMPLATE_DIR }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ env.TEMPLATE_DIR }}
