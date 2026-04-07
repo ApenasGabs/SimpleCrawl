@@ -1,0 +1,10 @@
+[
+  {
+    "id": "example-b-1",
+    "source": "siteB",
+    "title": "Example Domain",
+    "price": 1200,
+    "location": "Rio de Janeiro, RJ",
+    "url": "https://example.org/"
+  }
+]
