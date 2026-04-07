@@ -1,0 +1,72 @@
+[
+  {
+    "id": "quote-0",
+    "source": "siteC-ssr",
+    "title": "“The world as we have created it is a process of our thinking. It cannot be changed without changing our thinking.”",
+    "description": "Albert Einstein",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-1",
+    "source": "siteC-ssr",
+    "title": "“It is our choices, Harry, that show what we truly are, far more than our abilities.”",
+    "description": "J.K. Rowling",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-2",
+    "source": "siteC-ssr",
+    "title": "“There are only two ways to live your life. One is as though nothing is a miracle. The other is as though everything is a miracle.”",
+    "description": "Albert Einstein",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-3",
+    "source": "siteC-ssr",
+    "title": "“The person, be it gentleman or lady, who has not pleasure in a good novel, must be intolerably stupid.”",
+    "description": "Jane Austen",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-4",
+    "source": "siteC-ssr",
+    "title": "“Imperfection is beauty, madness is genius and it's better to be absolutely ridiculous than absolutely boring.”",
+    "description": "Marilyn Monroe",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-5",
+    "source": "siteC-ssr",
+    "title": "“Try not to become a man of success. Rather become a man of value.”",
+    "description": "Albert Einstein",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-6",
+    "source": "siteC-ssr",
+    "title": "“It is better to be hated for what you are than to be loved for what you are not.”",
+    "description": "André Gide",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-7",
+    "source": "siteC-ssr",
+    "title": "“I have not failed. I've just found 10,000 ways that won't work.”",
+    "description": "Thomas A. Edison",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-8",
+    "source": "siteC-ssr",
+    "title": "“A woman is like a tea bag; you never know how strong it is until it's in hot water.”",
+    "description": "Eleanor Roosevelt",
+    "url": "https://quotes.toscrape.com/"
+  },
+  {
+    "id": "quote-9",
+    "source": "siteC-ssr",
+    "title": "“A day without sunshine is like, you know, night.”",
+    "description": "Steve Martin",
+    "url": "https://quotes.toscrape.com/"
+  }
+]

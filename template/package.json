@@ -5,7 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
+    "scrape": "node scripts/run-scrape-mode.mjs",
     "scrape:parallel": "tsx src/main.ts",
+    "scrape:auto": "tsx src/main.auto.ts",
+    "metrics:collect": "node scripts/collect-run-metrics.mjs",
+    "metrics:compare": "node scripts/compare-run-metrics.mjs",
+    "typecheck:src": "tsc -p tsconfig.json --noEmit",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
+    "check:basic": "npm run typecheck:src && npm run typecheck:scripts && node --check scripts/run-scrape-mode.mjs && node --check scripts/collect-run-metrics.mjs && node --check scripts/compare-run-metrics.mjs",
     "scrape:siteA": "tsx src/scrapers/siteA/run.ts",
     "scrape:siteB": "tsx src/scrapers/siteB/run.ts",
     "scrape:siteC": "tsx src/scrapers/siteC/run.ts",
@@ -20,16 +27,17 @@
   "dependencies": {
     "@types/node": "^20.12.12",
     "cheerio": "^1.0.0",
+    "crawlee": "^3.16.0",
     "dotenv": "^16.4.5",
     "joi": "^17.13.3",
     "playwright": "^1.45.3",
     "winston": "^3.13.0"
   },
   "devDependencies": {
-    "eslint": "^9.4.0",
     "@eslint/js": "^9.4.0",
-    "typescript": "^5.6.2",
+    "eslint": "^9.4.0",
     "tsx": "^4.16.2",
+    "typescript": "^5.6.2",
     "vitest": "^1.6.0"
   }
 }

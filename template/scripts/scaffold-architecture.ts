@@ -6,9 +6,53 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ─── Engines de extração (decisão que vem ANTES da arquitetura) ────────────
 const AVAILABLE_ENGINES = ["ssr", "csr", "hybrid"] as const;
+const AVAILABLE_ORCHESTRATIONS = ["manual", "auto"] as const;
+const AVAILABLE_AUTO_PROFILES = [
+  "auto-infer",
+  "ssr-first",
+  "csr-first",
+  "hybrid",
+] as const;
+const AVAILABLE_ARCHITECTURES = [
+  "1-modular",
+  "2-ddd-lite",
+  "3-plugin-based",
+  "4-queue-based",
+] as const;
+
 type Engine = (typeof AVAILABLE_ENGINES)[number];
+type Orchestration = (typeof AVAILABLE_ORCHESTRATIONS)[number];
+type AutoProfile = (typeof AVAILABLE_AUTO_PROFILES)[number];
+
+const isEngine = (value: string): value is Engine =>
+  AVAILABLE_ENGINES.includes(value as Engine);
+
+const isOrchestration = (value: string): value is Orchestration =>
+  AVAILABLE_ORCHESTRATIONS.includes(value as Orchestration);
+
+const isAutoProfile = (value: string): value is AutoProfile =>
+  AVAILABLE_AUTO_PROFILES.includes(value as AutoProfile);
+
+interface Options {
+  orchestration: Orchestration | "";
+  engine: Engine | "";
+  profile: AutoProfile | "";
+  architecture: string;
+  destination: string;
+  backup: boolean;
+  interactive: boolean;
+}
+
+const ORCHESTRATION_DESCRIPTIONS: Record<Orchestration, string> = {
+  manual: "Fluxo atual com controle manual de engine",
+  auto: "Orquestracao autogerenciada com Crawlee",
+};
+
+const ORCHESTRATION_COLORS: Record<Orchestration, string> = {
+  manual: "\u001b[36m",
+  auto: "\u001b[33m",
+};
 
 const ENGINE_DESCRIPTIONS: Record<Engine, string> = {
   ssr: "HTTP + Cheerio  (sites server-side rendered)",
@@ -22,21 +66,19 @@ const ENGINE_COLORS: Record<Engine, string> = {
   hybrid: "\u001b[33m",
 };
 
-// ─── Arquiteturas de projeto ───────────────────────────────────────────────
-interface Options {
-  engine: Engine;
-  architecture: string;
-  destination: string;
-  backup: boolean;
-  interactive: boolean;
-}
+const AUTO_PROFILE_DESCRIPTIONS: Record<AutoProfile, string> = {
+  "auto-infer": "Decisao automatica com defaults conservadores",
+  "ssr-first": "Executa SSR antes de browser",
+  "csr-first": "Executa browser antes de SSR",
+  hybrid: "SSR + browser fallback (recomendado)",
+};
 
-const AVAILABLE_ARCHITECTURES = [
-  "1-modular",
-  "2-ddd-lite",
-  "3-plugin-based",
-  "4-queue-based",
-] as const;
+const AUTO_PROFILE_COLORS: Record<AutoProfile, string> = {
+  "auto-infer": "\u001b[35m",
+  "ssr-first": "\u001b[32m",
+  "csr-first": "\u001b[36m",
+  hybrid: "\u001b[33m",
+};
 
 const ARCH_COLORS: Record<string, string> = {
   "1-modular": "\u001b[36m",
@@ -60,17 +102,31 @@ const ROOT_FILES = [
 
 const parseArgs = (): Options => {
   const args = process.argv.slice(2);
+  let orchestration: Orchestration | "" = "";
   let engine: Engine | "" = "";
+  let profile: AutoProfile | "" = "";
   let architecture = "";
-  let destination = "new-template";
+  let destination = "my-scraper";
   let backup = true;
   let interactive = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
+    if (arg === "--orchestration" || arg === "-o") {
+      const val = (args[i + 1] ?? "") as Orchestration;
+      if (AVAILABLE_ORCHESTRATIONS.includes(val)) orchestration = val;
+      i += 1;
+      continue;
+    }
     if (arg === "--engine" || arg === "-e") {
       const val = (args[i + 1] ?? "") as Engine;
       if (AVAILABLE_ENGINES.includes(val)) engine = val;
+      i += 1;
+      continue;
+    }
+    if (arg === "--profile" || arg === "-p") {
+      const val = (args[i + 1] ?? "") as AutoProfile;
+      if (AVAILABLE_AUTO_PROFILES.includes(val)) profile = val;
       i += 1;
       continue;
     }
@@ -93,7 +149,9 @@ const parseArgs = (): Options => {
   }
 
   return {
+    orchestration,
     engine: engine || ("" as Engine),
+    profile,
     architecture,
     destination,
     backup,
@@ -169,20 +227,43 @@ const promptSelect = async (
 };
 
 const promptInteractive = async (
-  defaults: Omit<Options, "architecture" | "engine" | "interactive">,
+  defaults: Omit<
+    Options,
+    "architecture" | "engine" | "orchestration" | "profile" | "interactive"
+  >,
 ): Promise<Omit<Options, "interactive">> => {
-  // ── Passo 1: Engine de extração ──────────────────────────────────────────
-  const engine = (await promptSelect(
-    "1/2 — Engine de extração (tipo de site):",
-    [...AVAILABLE_ENGINES],
-    2, // hybrid como padrão
-    ENGINE_DESCRIPTIONS,
-    ENGINE_COLORS,
-  )) as Engine;
+  const orchestration = (await promptSelect(
+    "1/4 — Orquestracao do projeto:",
+    [...AVAILABLE_ORCHESTRATIONS],
+    0,
+    ORCHESTRATION_DESCRIPTIONS,
+    ORCHESTRATION_COLORS,
+  )) as Orchestration;
 
-  // ── Passo 2: Arquitetura do projeto ──────────────────────────────────────
+  const engine =
+    orchestration === "manual"
+      ? ((await promptSelect(
+          "2/4 — Engine de extracao (tipo de site):",
+          [...AVAILABLE_ENGINES],
+          2,
+          ENGINE_DESCRIPTIONS,
+          ENGINE_COLORS,
+        )) as Engine)
+      : "hybrid";
+
+  const profile =
+    orchestration === "auto"
+      ? ((await promptSelect(
+          "2/4 — Perfil do autogerenciado:",
+          [...AVAILABLE_AUTO_PROFILES],
+          3,
+          AUTO_PROFILE_DESCRIPTIONS,
+          AUTO_PROFILE_COLORS,
+        )) as AutoProfile)
+      : "";
+
   const architecture = await promptSelect(
-    "2/2 — Arquitetura do projeto:",
+    "3/4 — Arquitetura do projeto:",
     [...AVAILABLE_ARCHITECTURES],
     0,
   );
@@ -193,7 +274,7 @@ const promptInteractive = async (
   });
 
   const destAnswer = await rl.question(
-    `Destino (padrao: ${defaults.destination}): `,
+    `4/4 — Destino (padrao: ${defaults.destination}): `,
   );
   const destination = destAnswer.trim() || defaults.destination;
 
@@ -208,7 +289,7 @@ const promptInteractive = async (
 
   await rl.close();
 
-  return { engine, architecture, destination, backup };
+  return { orchestration, engine, profile, architecture, destination, backup };
 };
 
 const exists = async (targetPath: string): Promise<boolean> => {
@@ -256,29 +337,68 @@ const backupDestination = async (destination: string): Promise<void> => {
 const scaffold = async (): Promise<void> => {
   const rootDir = path.resolve(__dirname, "..");
   const {
+    orchestration: argOrchestration,
     engine: argEngine,
+    profile: argProfile,
     architecture: argArch,
     destination,
     backup,
     interactive,
   } = parseArgs();
 
-  const shouldPrompt = interactive || !argArch || !argEngine;
+  const shouldPrompt = interactive || !argArch || !argOrchestration;
+  const resolvedEngine: Engine =
+    argOrchestration === "auto"
+      ? "hybrid"
+      : isEngine(argEngine)
+        ? argEngine
+        : "hybrid";
+  const resolvedProfile: AutoProfile | "" =
+    argOrchestration === "auto"
+      ? isAutoProfile(argProfile)
+        ? argProfile
+        : "hybrid"
+      : "";
   const resolved = shouldPrompt
     ? await promptInteractive({ destination, backup })
-    : { engine: argEngine, architecture: argArch, destination, backup };
+    : {
+        orchestration: argOrchestration,
+        engine: resolvedEngine,
+        profile: resolvedProfile,
+        architecture: argArch,
+        destination,
+        backup,
+      };
 
   const {
+    orchestration,
     engine,
+    profile,
     architecture,
     destination: resolvedDest,
     backup: resolvedBackup,
   } = resolved;
 
+  if (!isOrchestration(orchestration)) {
+    throw new Error(
+      `Orquestracao invalida: ${orchestration}. Opcoes: ${AVAILABLE_ORCHESTRATIONS.join(
+        ", ",
+      )}`,
+    );
+  }
+
   // ── Validar engine ───────────────────────────────────────────────────────
-  if (!AVAILABLE_ENGINES.includes(engine)) {
+  if (!isEngine(engine)) {
     throw new Error(
       `Engine invalida: ${engine}. Opcoes: ${AVAILABLE_ENGINES.join(", ")}`,
+    );
+  }
+
+  if (orchestration === "auto" && !isAutoProfile(profile)) {
+    throw new Error(
+      `Perfil auto invalido: ${profile}. Opcoes: ${AVAILABLE_AUTO_PROFILES.join(
+        ", ",
+      )}`,
     );
   }
 
@@ -343,6 +463,13 @@ const scaffold = async (): Promise<void> => {
   await fs.mkdir(destSrc, { recursive: true });
   await copyDir(sourceDir, destSrc);
 
+  for (const dir of ["domain", "utils"] as const) {
+    const srcDir = path.join(rootDir, "src", dir);
+    if (await exists(srcDir)) {
+      await copyDir(srcDir, path.join(destSrc, dir));
+    }
+  }
+
   // ── Copiar base scrapers conforme engine ─────────────────────────────────
   const baseDir = path.join(rootDir, "src", "scrapers", "base");
   const destBase = path.join(destSrc, "scrapers", "base");
@@ -361,18 +488,106 @@ const scaffold = async (): Promise<void> => {
     );
   }
 
-  // ── Copiar BrowserPool apenas quando há browser ──────────────────────────
-  if (engine === "csr" || engine === "hybrid") {
-    const pipelineDir = path.join(rootDir, "src", "pipeline");
-    const destPipeline = path.join(destSrc, "pipeline");
-    await fs.mkdir(destPipeline, { recursive: true });
-    const poolSrc = path.join(pipelineDir, "BrowserPool.ts");
-    if (await exists(poolSrc)) {
-      await copyFile(poolSrc, path.join(destPipeline, "BrowserPool.ts"));
+  const pipelineDir = path.join(rootDir, "src", "pipeline");
+  const pipelineDest = path.join(destSrc, "pipeline");
+  if (await exists(pipelineDir)) {
+    await fs.mkdir(pipelineDest, { recursive: true });
+    for (const entry of await fs.readdir(pipelineDir, {
+      withFileTypes: true,
+    })) {
+      if (entry.name === "BrowserPool.ts" && engine === "ssr") {
+        continue;
+      }
+      const src = path.join(pipelineDir, entry.name);
+      const dest = path.join(pipelineDest, entry.name);
+      if (entry.isDirectory()) {
+        await copyDir(src, dest);
+      } else {
+        await copyFile(src, dest);
+      }
     }
   }
 
+  if (orchestration === "auto") {
+    const autoMain = path.join(rootDir, "src", "main.auto.ts");
+    if (await exists(autoMain)) {
+      await copyFile(autoMain, path.join(destSrc, "main.auto.ts"));
+    }
+
+    const fullScrapersDir = path.join(rootDir, "src", "scrapers");
+    if (await exists(fullScrapersDir)) {
+      await copyDir(fullScrapersDir, path.join(destSrc, "scrapers"));
+    }
+
+    await fs.writeFile(
+      path.join(destinationDir, "simplecrawl.auto.json"),
+      JSON.stringify(
+        {
+          orchestration,
+          profile,
+          engine: "hybrid",
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
+
+  const pkgPath = path.join(destinationDir, "package.json");
+  if (await exists(pkgPath)) {
+    const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8")) as {
+      name?: string;
+      private?: boolean;
+      version?: string;
+      scripts?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    };
+
+    pkg.name = path.basename(destinationDir);
+    pkg.private = true;
+    pkg.version = "0.1.0";
+
+    if (orchestration === "manual") {
+      if (engine === "ssr") {
+        delete pkg.dependencies?.playwright;
+      }
+      if (engine === "csr") {
+        delete pkg.dependencies?.cheerio;
+      }
+      if (pkg.scripts) {
+        delete pkg.scripts["scrape:auto"];
+        pkg.scripts.scrape = "npm run scrape:parallel";
+      }
+    } else if (pkg.scripts) {
+      pkg.scripts.scrape = "npm run scrape:auto";
+    }
+
+    await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+  }
+
+  const readme = `# ${path.basename(destinationDir)}
+
+Criado com SimpleCrawl.
+
+- **Orquestracao:** ${orchestration}${orchestration === "auto" ? ` — perfil ${profile}` : ""}
+- **Engine:** ${engine} — ${ENGINE_DESCRIPTIONS[engine]}
+- **Arquitetura:** ${architecture}
+
+## Inicio rapido
+
+\`\`\`bash
+cd ${path.basename(destinationDir)}
+npm install
+${engine !== "ssr" ? "npx playwright install --with-deps chromium" : "# Sem browser necessario (SSR)"}
+${orchestration === "auto" ? "npm run scrape:auto" : "npm run scrape:parallel"}
+\`\`\`
+`;
+  await fs.writeFile(path.join(destinationDir, "README.md"), readme);
+
   console.log(`\n✅ Template gerado em: ${destinationDir}`);
+  console.log(
+    `   Orquestracao: ${ORCHESTRATION_COLORS[orchestration]}${orchestration}${COLOR_RESET}${orchestration === "auto" ? ` — ${profile}` : ""}`,
+  );
   console.log(
     `   Engine:       ${ENGINE_COLORS[engine]}${engine}${COLOR_RESET} — ${ENGINE_DESCRIPTIONS[engine]}`,
   );
@@ -380,7 +595,11 @@ const scaffold = async (): Promise<void> => {
     `   Arquitetura:  ${ARCH_COLORS[architecture] ?? ""}${architecture}${COLOR_RESET}`,
   );
 
-  if (engine === "ssr") {
+  if (orchestration === "auto") {
+    console.log(
+      "\n💡 Dica: use simplecrawl.auto.json para ajustar o perfil auto.",
+    );
+  } else if (engine === "ssr") {
     console.log(
       "\n💡 Dica: use BaseHttpScraper (fetch + cheerio) como base dos seus scrapers.",
     );
