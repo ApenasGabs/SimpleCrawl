@@ -11,6 +11,9 @@ permissions:
 env:
   TEMPLATE_DIR: "template"
   DATA_DIR: "template/data/scrapers"
+  SCRAPE_ORCHESTRATION: "manual"
+  SCRAPE_SHADOW_MODE: "false"
+  SCRAPE_FALLBACK_TO_MANUAL: "true"
   MAX_RETRIES: 2
   RETRY_DELAY: 10
 
@@ -33,6 +36,10 @@ jobs:
         working-directory: ${{ env.TEMPLATE_DIR }}
         run: npm ci --prefer-offline
 
+      - name: Basic validation (type/syntax)
+        working-directory: ${{ env.TEMPLATE_DIR }}
+        run: npm run check:basic
+
       - name: Install system packages
         run: |
           sudo apt-get update
@@ -45,31 +52,113 @@ jobs:
       - name: Create data directory
         run: mkdir -p ${{ env.DATA_DIR }}
 
-      - name: Run parallel scraping with retries
+      - name: Run scraping by orchestration mode
         id: scrape
         working-directory: ${{ env.TEMPLATE_DIR }}
         run: |
-          set +e
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "Attempt $i of $MAX_RETRIES"
-            Xvfb :99 -ac -screen 0 1280x1024x16 &
-            export DISPLAY=:99
-            if npm run scrape:parallel; then
-              echo "Scraping completed successfully"
-              break
-            else
-              echo "Scraping failed on attempt $i"
-              if [ $i -lt $MAX_RETRIES ]; then
-                echo "Waiting $RETRY_DELAY seconds before retry..."
-                sleep $RETRY_DELAY
+          set -euo pipefail
+
+          SCRAPE_START_TS=$(date +%s)
+          FALLBACK_TRIGGERED="false"
+
+          run_with_retries() {
+            local mode="$1"
+            local fallback="$2"
+
+            for i in $(seq 1 "$MAX_RETRIES"); do
+              echo "Attempt $i/$MAX_RETRIES for mode=$mode"
+              Xvfb :99 -ac -screen 0 1280x1024x16 &
+              XVFB_PID=$!
+              trap 'kill "$XVFB_PID" >/dev/null 2>&1 || true' RETURN
+              export DISPLAY=:99
+
+              if SCRAPE_ORCHESTRATION="$mode" SCRAPE_FALLBACK_TO_MANUAL="$fallback" npm run scrape; then
+                kill "$XVFB_PID" >/dev/null 2>&1 || true
+                trap - RETURN
+                return 0
               fi
-            fi
-          done
-          set -e
+
+              kill "$XVFB_PID" >/dev/null 2>&1 || true
+              trap - RETURN
+              echo "Failed attempt $i for mode=$mode"
+              if [ "$i" -lt "$MAX_RETRIES" ]; then
+                echo "Waiting $RETRY_DELAY seconds before retry..."
+                sleep "$RETRY_DELAY"
+              fi
+            done
+
+            return 1
+          }
+
+          primary_mode="${SCRAPE_ORCHESTRATION}"
+          if [ "$primary_mode" != "manual" ] && [ "$primary_mode" != "auto" ]; then
+            echo "Invalid SCRAPE_ORCHESTRATION=$primary_mode"
+            exit 1
+          fi
+
+          if run_with_retries "$primary_mode" "$SCRAPE_FALLBACK_TO_MANUAL"; then
+            echo "Primary mode succeeded: $primary_mode"
+          elif [ "$primary_mode" = "auto" ] && [ "$SCRAPE_FALLBACK_TO_MANUAL" = "true" ]; then
+            echo "Auto mode failed after retries, forcing fallback to manual"
+            FALLBACK_TRIGGERED="true"
+            run_with_retries "manual" "false"
+          else
+            echo "Primary mode failed with no fallback path"
+            exit 1
+          fi
+
+          SCRAPE_END_TS=$(date +%s)
+          SCRAPE_RUN_DURATION_MS=$(( (SCRAPE_END_TS - SCRAPE_START_TS) * 1000 ))
+          {
+            echo "SCRAPE_PRIMARY_MODE=$primary_mode"
+            echo "SCRAPE_FALLBACK_TRIGGERED=$FALLBACK_TRIGGERED"
+            echo "SCRAPE_RUN_DURATION_MS=$SCRAPE_RUN_DURATION_MS"
+            echo "SCRAPE_SHADOW_DURATION_MS=0"
+            echo "SCRAPE_SHADOW_MODE_SELECTED=none"
+          } >> "$GITHUB_ENV"
+
+      - name: Shadow mode run (non-blocking)
+        if: env.SCRAPE_SHADOW_MODE == 'true'
+        continue-on-error: true
+        working-directory: ${{ env.TEMPLATE_DIR }}
+        run: |
+          set -euo pipefail
+          shadow_mode="auto"
+          if [ "${SCRAPE_ORCHESTRATION}" = "auto" ]; then
+            shadow_mode="manual"
+          fi
+
+          SHADOW_START_TS=$(date +%s)
+          Xvfb :99 -ac -screen 0 1280x1024x16 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          SCRAPE_ORCHESTRATION="$shadow_mode" SCRAPE_FALLBACK_TO_MANUAL="false" npm run scrape
+          kill "$XVFB_PID" >/dev/null 2>&1 || true
+          SHADOW_END_TS=$(date +%s)
+          SHADOW_DURATION_MS=$(( (SHADOW_END_TS - SHADOW_START_TS) * 1000 ))
+          {
+            echo "SCRAPE_SHADOW_MODE_SELECTED=$shadow_mode"
+            echo "SCRAPE_SHADOW_DURATION_MS=$SHADOW_DURATION_MS"
+          } >> "$GITHUB_ENV"
 
       - name: Merge and validate
         working-directory: ${{ env.TEMPLATE_DIR }}
         run: npm run merge:validate
+
+      - name: Collect run metrics
+        working-directory: ${{ env.TEMPLATE_DIR }}
+        run: npm run metrics:collect
+
+      - name: Summarize compare gate
+        working-directory: ${{ env.TEMPLATE_DIR }}
+        run: npm run metrics:compare
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-metrics
+          path: ${{ env.TEMPLATE_DIR }}/data/metrics
+          if-no-files-found: warn
 
       - name: Verify output files
         run: |
@@ -86,7 +175,7 @@ jobs:
           git config user.name "crawler-bot"
           git config user.email "crawler-bot@users.noreply.github.com"
 
-          git add -A data/scrapers/ || true
+          git add -A data/scrapers/ data/metrics/ || true
 
           if ! git diff --cached --quiet; then
             echo "✅ Fazendo commit..."

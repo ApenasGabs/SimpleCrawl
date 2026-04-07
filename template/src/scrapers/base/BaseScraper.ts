@@ -18,13 +18,16 @@ export abstract class BaseScraper<T extends RawData = RawData> {
     await page.setExtraHTTPHeaders({ "User-Agent": this.config.userAgent });
   };
 
+  configurePage = async (page: Page): Promise<void> => {
+    await this.setup(page);
+  };
+
   protected abstract scrape(page: Page): Promise<T[]>;
   protected abstract map(raw: T[]): Promise<ScrapedRecord[]>;
   protected abstract validate(data: ScrapedRecord[]): Promise<ScrapedRecord[]>;
 
-  run = async (context: BrowserContext): Promise<ScrapedRecord[]> => {
+  process = async (page: Page): Promise<ScrapedRecord[]> => {
     const start = Date.now();
-    const page = await context.newPage();
     try {
       logger.info("scraper.start", { scraper: this.name });
       await this.setup(page);
@@ -40,6 +43,15 @@ export abstract class BaseScraper<T extends RawData = RawData> {
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown";
       logger.error("scraper.error", { scraper: this.name, error: message });
+      throw error;
+    }
+  };
+
+  run = async (context: BrowserContext): Promise<ScrapedRecord[]> => {
+    const page = await context.newPage();
+    try {
+      return await this.process(page);
+    } catch (error) {
       await page.screenshot({ path: `logs/${this.name}-error.png` });
       throw error;
     } finally {

@@ -1,0 +1,35 @@
+name: Smoke Create SimpleCrawl
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - "bin/**"
+      - "scripts/**"
+      - "template/**"
+      - "package.json"
+      - ".github/workflows/create-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Basic validation
+        run: npm run check:basic
+
+      - name: Smoke create scaffold
+        run: npm run smoke:create

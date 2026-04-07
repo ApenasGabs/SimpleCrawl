@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-04-07T23:07:11.012Z",
+  "gitRef": "local",
+  "primaryMode": "unknown",
+  "fallbackTriggered": false,
+  "shadowEnabled": false,
+  "shadowMode": "none",
+  "runDurationMs": 0,
+  "shadowDurationMs": 0,
+  "files": 3,
+  "mergedItems": 0,
+  "perSource": [
+    {
+      "source": "siteA",
+      "items": 1
+    },
+    {
+      "source": "siteB",
+      "items": 1
+    },
+    {
+      "source": "siteC-ssr",
+      "items": 10
+    }
+  ]
+}

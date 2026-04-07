@@ -28,7 +28,9 @@
   ],
   "scripts": {
     "dev": "node bin/index.mjs",
-    "build": "echo 'nothing to build — ships as plain JS'"
+    "build": "echo 'nothing to build — ships as plain JS'",
+    "smoke:create": "node scripts/smoke-create.mjs",
+    "check:basic": "node --check bin/index.mjs && node --check scripts/smoke-create.mjs && npm --prefix template run check:basic"
   },
   "engines": {
     "node": ">=18"

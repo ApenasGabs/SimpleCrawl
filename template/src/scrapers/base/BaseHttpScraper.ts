@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { ScrapedRecord, RawData } from "../../domain/types";
+import type { RawData, ScrapedRecord } from "../../domain/types";
 import { logger } from "../../utils/logger";
 
 export interface HttpScraperConfig {
@@ -52,15 +52,16 @@ export abstract class BaseHttpScraper<T extends RawData = RawData> {
   protected abstract map(raw: T[]): Promise<ScrapedRecord[]>;
   protected abstract validate(data: ScrapedRecord[]): Promise<ScrapedRecord[]>;
 
-  /**
-   * Executa o pipeline completo: fetch → scrape → map → validate.
-   * Não precisa de BrowserContext — roda standalone.
-   */
-  run = async (): Promise<ScrapedRecord[]> => {
+  process = async (
+    $: cheerio.CheerioAPI,
+    sourceUrl: string = this.baseUrl,
+  ): Promise<ScrapedRecord[]> => {
     const start = Date.now();
     try {
-      logger.info("http-scraper.start", { scraper: this.name });
-      const $ = await this.fetch(this.baseUrl);
+      logger.info("http-scraper.start", {
+        scraper: this.name,
+        sourceUrl,
+      });
       const raw = await this.scrape($);
       const mapped = await this.map(raw);
       const validated = await this.validate(mapped);
@@ -74,8 +75,26 @@ export abstract class BaseHttpScraper<T extends RawData = RawData> {
       const message = error instanceof Error ? error.message : "unknown";
       logger.error("http-scraper.error", {
         scraper: this.name,
+        sourceUrl,
         error: message,
       });
+      throw error;
+    }
+  };
+
+  /**
+   * Executa o pipeline completo: fetch → scrape → map → validate.
+   * Não precisa de BrowserContext — roda standalone.
+   */
+  run = async (): Promise<ScrapedRecord[]> => {
+    return this.runAt(this.baseUrl);
+  };
+
+  runAt = async (url: string): Promise<ScrapedRecord[]> => {
+    try {
+      const $ = await this.fetch(url);
+      return await this.process($, url);
+    } catch (error) {
       throw error;
     }
   };

@@ -5,7 +5,7 @@
 // Usage:
 //   npm create simplecrawl            (interactive)
 //   npm create simplecrawl my-project (sets destination)
-//   npm create simplecrawl -- --engine ssr --arch 1-modular --dest my-project
+//   npm create simplecrawl -- --orchestration auto --profile hybrid --arch 1-modular --dest my-project
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { promises as fs } from "node:fs";
@@ -25,6 +25,35 @@ const ENGINE_DESC = {
   hybrid: "Cheerio + Playwright fallback (melhor dos dois)",
 };
 const ENGINE_COLORS = { ssr: "\x1b[32m", csr: "\x1b[36m", hybrid: "\x1b[33m" };
+
+const ORCHESTRATIONS = /** @type {const} */ (["manual", "auto"]);
+const ORCHESTRATION_DESC = {
+  manual: "Fluxo atual com engine + arquitetura",
+  auto: "Orquestração autogerenciada com Crawlee",
+};
+const ORCHESTRATION_COLORS = {
+  manual: "\x1b[36m",
+  auto: "\x1b[33m",
+};
+
+const AUTO_PROFILES = /** @type {const} */ ([
+  "auto-infer",
+  "ssr-first",
+  "csr-first",
+  "hybrid",
+]);
+const AUTO_PROFILE_DESC = {
+  "auto-infer": "Decisão automática com defaults conservadores",
+  "ssr-first": "Executa SSR antes de browser",
+  "csr-first": "Executa browser antes de SSR",
+  hybrid: "SSR + browser fallback (recomendado)",
+};
+const AUTO_PROFILE_COLORS = {
+  "auto-infer": "\x1b[35m",
+  "ssr-first": "\x1b[32m",
+  "csr-first": "\x1b[36m",
+  hybrid: "\x1b[33m",
+};
 
 const ARCHITECTURES = [
   "1-modular",
@@ -52,14 +81,24 @@ const DIM = "\x1b[2m";
 // ─── CLI parsing ───────────────────────────────────────────────────────────
 function parseArgs() {
   const args = process.argv.slice(2);
+  let orchestration = "";
   let engine = "";
+  let autoProfile = "";
   let arch = "";
   let dest = "";
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (a === "--orchestration" || a === "-o") {
+      orchestration = args[++i] ?? "";
+      continue;
+    }
     if (a === "--engine" || a === "-e") {
       engine = args[++i] ?? "";
+      continue;
+    }
+    if (a === "--profile" || a === "-p") {
+      autoProfile = args[++i] ?? "";
       continue;
     }
     if (a === "--arch" || a === "-a") {
@@ -75,7 +114,7 @@ function parseArgs() {
     }
   }
 
-  return { engine, arch, dest };
+  return { orchestration, engine, autoProfile, arch, dest };
 }
 
 // ─── Interactive select (↑/↓ + Enter) ─────────────────────────────────────
@@ -101,7 +140,6 @@ function select(label, options, descriptions, colors, defaultIdx = 0) {
     const onKey = (data) => {
       const k = data.toString();
       if (k === "\x03") {
-        // Restore terminal state before propagating SIGINT
         try {
           if (process.stdin.isTTY) {
             process.stdin.setRawMode(false);
@@ -167,31 +205,60 @@ async function copyDir(src, dest) {
 async function main() {
   console.log(`\n  ${BOLD}🕷️  SimpleCrawl${RST} ${DIM}v0.1.0${RST}\n`);
 
-  const { engine: argEngine, arch: argArch, dest: argDest } = parseArgs();
+  const {
+    orchestration: argOrchestration,
+    engine: argEngine,
+    autoProfile: argAutoProfile,
+    arch: argArch,
+    dest: argDest,
+  } = parseArgs();
 
-  // 1 — Engine
-  const engine = ENGINES.includes(argEngine)
-    ? argEngine
+  const orchestration = ORCHESTRATIONS.includes(argOrchestration)
+    ? argOrchestration
     : await select(
-        "1/3 — Engine de extração (tipo de site):",
-        [...ENGINES],
-        ENGINE_DESC,
-        ENGINE_COLORS,
-        2,
+        "1/4 — Orquestração do projeto:",
+        [...ORCHESTRATIONS],
+        ORCHESTRATION_DESC,
+        ORCHESTRATION_COLORS,
+        0,
       );
 
-  // 2 — Architecture
+  const engine =
+    orchestration === "manual"
+      ? ENGINES.includes(argEngine)
+        ? argEngine
+        : await select(
+            "2/4 — Engine de extração (tipo de site):",
+            [...ENGINES],
+            ENGINE_DESC,
+            ENGINE_COLORS,
+            2,
+          )
+      : "hybrid";
+
+  const autoProfile =
+    orchestration === "auto"
+      ? AUTO_PROFILES.includes(argAutoProfile)
+        ? argAutoProfile
+        : await select(
+            "2/4 — Perfil do autogerenciado:",
+            [...AUTO_PROFILES],
+            AUTO_PROFILE_DESC,
+            AUTO_PROFILE_COLORS,
+            3,
+          )
+      : "";
+
   const arch = ARCHITECTURES.includes(argArch)
     ? argArch
     : await select(
-        "2/3 — Arquitetura do projeto:",
+        "3/4 — Arquitetura do projeto:",
         ARCHITECTURES,
         ARCH_DESC,
         ARCH_COLORS,
         0,
       );
 
-  // 3 — Destination
   let dest = argDest;
   if (!dest) {
     const rl = readline.createInterface({
@@ -199,7 +266,7 @@ async function main() {
       output: process.stdout,
     });
     const answer = await rl.question(
-      `  ${BOLD}3/3 — Nome do projeto${RST} ${DIM}(padrão: my-scraper)${RST}: `,
+      `  ${BOLD}4/4 — Nome do projeto${RST} ${DIM}(padrão: my-scraper)${RST}: `,
     );
     dest = answer.trim() || "my-scraper";
     rl.close();
@@ -214,10 +281,8 @@ async function main() {
     }
   }
 
-  // ── Scaffold ─────────────────────────────────────────────────────────────
   await fs.mkdir(destDir, { recursive: true });
 
-  // Copy root files from template
   const rootItems = [
     "package.json",
     "tsconfig.json",
@@ -238,7 +303,6 @@ async function main() {
     }
   }
 
-  // Copy architecture source
   const archSrc = path.join(
     TEMPLATE_ROOT,
     "src",
@@ -253,30 +317,54 @@ async function main() {
   const destSrc = path.join(destDir, "src");
   await copyDir(archSrc, destSrc);
 
-  // Copy shared infra
   const sharedDirs = ["domain", "utils"];
   for (const dir of sharedDirs) {
     const src = path.join(TEMPLATE_ROOT, "src", dir);
     if (await exists(src)) await copyDir(src, path.join(destSrc, dir));
   }
 
-  // Copy base scrapers per engine
+  if (orchestration === "auto") {
+    const autoScrapersSrc = path.join(TEMPLATE_ROOT, "src", "scrapers");
+    if (await exists(autoScrapersSrc)) {
+      await copyDir(autoScrapersSrc, path.join(destSrc, "scrapers"));
+    }
+
+    const autoMainSrc = path.join(TEMPLATE_ROOT, "src", "main.auto.ts");
+    if (await exists(autoMainSrc)) {
+      await fs.copyFile(autoMainSrc, path.join(destSrc, "main.auto.ts"));
+    }
+
+    await fs.writeFile(
+      path.join(destDir, "simplecrawl.auto.json"),
+      JSON.stringify(
+        {
+          orchestration,
+          profile: autoProfile,
+          engine: "hybrid",
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
+
   const baseDir = path.join(TEMPLATE_ROOT, "src", "scrapers", "base");
   const destBase = path.join(destSrc, "scrapers", "base");
   await fs.mkdir(destBase, { recursive: true });
 
   if (engine === "csr" || engine === "hybrid") {
     const f = path.join(baseDir, "BaseScraper.ts");
-    if (await exists(f))
+    if (await exists(f)) {
       await fs.copyFile(f, path.join(destBase, "BaseScraper.ts"));
+    }
   }
   if (engine === "ssr" || engine === "hybrid") {
     const f = path.join(baseDir, "BaseHttpScraper.ts");
-    if (await exists(f))
+    if (await exists(f)) {
       await fs.copyFile(f, path.join(destBase, "BaseHttpScraper.ts"));
+    }
   }
 
-  // Copy pipeline (BrowserPool only when browser engine)
   const pipelineSrc = path.join(TEMPLATE_ROOT, "src", "pipeline");
   const pipelineDest = path.join(destSrc, "pipeline");
   if (await exists(pipelineSrc)) {
@@ -292,7 +380,6 @@ async function main() {
     }
   }
 
-  // Rewrite package.json with project name and adjust deps
   const pkgPath = path.join(destDir, "package.json");
   if (await exists(pkgPath)) {
     const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
@@ -300,23 +387,25 @@ async function main() {
     pkg.private = true;
     pkg.version = "0.1.0";
 
-    // Remove playwright dep if SSR-only
-    if (engine === "ssr") {
-      delete pkg.dependencies?.playwright;
-    }
-    // Remove cheerio dep if CSR-only
-    if (engine === "csr") {
-      delete pkg.dependencies?.cheerio;
+    if (orchestration === "manual") {
+      if (engine === "ssr") delete pkg.dependencies?.playwright;
+      if (engine === "csr") delete pkg.dependencies?.cheerio;
+      if (pkg.scripts) {
+        delete pkg.scripts["scrape:auto"];
+        pkg.scripts.scrape = "npm run scrape:parallel";
+      }
+    } else if (pkg.scripts) {
+      pkg.scripts.scrape = "npm run scrape:auto";
     }
 
     await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
   }
 
-  // Create a minimal README
   const readme = `# ${path.basename(dest)}
 
 Criado com [SimpleCrawl](https://github.com/Apenasgabs/1st.Crawler).
 
+- **Orquestração:** ${orchestration}${orchestration === "auto" ? ` — perfil ${autoProfile}` : ""}
 - **Engine:** ${engine} — ${ENGINE_DESC[engine]}
 - **Arquitetura:** ${arch} — ${ARCH_DESC[arch]}
 
@@ -326,17 +415,17 @@ Criado com [SimpleCrawl](https://github.com/Apenasgabs/1st.Crawler).
 cd ${dest}
 npm install
 ${engine !== "ssr" ? "npx playwright install --with-deps chromium" : "# Sem browser necessário (SSR)"}
-npm run scrape:parallel
+${orchestration === "auto" ? "npm run scrape:auto" : "npm run scrape:parallel"}
 \`\`\`
 
 Veja \`docs/\` para variáveis de ambiente e detalhes.
 `;
   await fs.writeFile(path.join(destDir, "README.md"), readme);
 
-  // ── Summary ──────────────────────────────────────────────────────────────
   console.log(`
   ${BOLD}✅ Projeto criado em ${dest}/${RST}
 
+  ${DIM}Orquestração:${RST} ${ORCHESTRATION_COLORS[orchestration]}${orchestration}${RST}${orchestration === "auto" ? ` — ${autoProfile}` : ""}
   ${DIM}Engine:${RST}       ${ENGINE_COLORS[engine]}${engine}${RST} — ${ENGINE_DESC[engine]}
   ${DIM}Arquitetura:${RST}  ${ARCH_COLORS[arch] ?? ""}${arch}${RST} — ${ARCH_DESC[arch]}
 
@@ -344,7 +433,7 @@ Veja \`docs/\` para variáveis de ambiente e detalhes.
 
     cd ${dest}
     npm install${engine !== "ssr" ? "\n    npx playwright install --with-deps chromium" : ""}
-    npm run scrape:parallel
+    ${orchestration === "auto" ? "npm run scrape:auto" : "npm run scrape:parallel"}
 `);
 }
 
