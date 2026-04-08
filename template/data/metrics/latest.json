@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-04-07T23:07:11.012Z",
-  "gitRef": "local",
-  "primaryMode": "unknown",
+  "timestamp": "2026-04-08T01:08:21.111Z",
+  "gitRef": "main",
+  "primaryMode": "manual",
   "fallbackTriggered": false,
   "shadowEnabled": false,
   "shadowMode": "none",
-  "runDurationMs": 0,
+  "runDurationMs": 3000,
   "shadowDurationMs": 0,
   "files": 3,
-  "mergedItems": 0,
+  "mergedItems": 12,
   "perSource": [
     {
       "source": "siteA",
