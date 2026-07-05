@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-07-04T18:47:05.234Z",
+  "timestamp": "2026-07-05T01:29:40.187Z",
   "gitRef": "main",
   "primaryMode": "manual",
   "fallbackTriggered": false,
   "shadowEnabled": false,
   "shadowMode": "none",
-  "runDurationMs": 2000,
+  "runDurationMs": 1000,
   "shadowDurationMs": 0,
   "files": 3,
   "mergedItems": 12,
