@@ -2,7 +2,7 @@
   {
     "id": "example-1",
     "source": "siteA",
-    "title": "Example Domain",
+    "title": "Rate Limited | example.com | Cloudflare",
     "price": 1000,
     "location": "Sao Paulo, SP",
     "url": "https://example.com/"
