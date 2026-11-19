@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-18T14:42:00.586Z",
-  "gitRef": "main",
+  "timestamp": "2026-11-19T11:18:21.653Z",
+  "gitRef": "fix/#168-pin-ubuntu-2404-playwright",
   "primaryMode": "manual",
   "fallbackTriggered": false,
   "shadowEnabled": false,
