@@ -19,7 +19,7 @@ env:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.59 não suporta ubuntu-26.04 (Refs APE-168)
     timeout-minutes: 360
     steps:
       - name: Checkout
